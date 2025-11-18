@@ -1,0 +1,22 @@
+/* src/styles/NeighborhoodSidebar.css */
+.sidebar {
+    padding: 20px;
+    background-color: white;
+    border-left: 1px solid #ddd;
+    overflow-y: auto;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  table td {
+    padding: 5px;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  table tr:last-child td {
+    border-bottom: none;
+  }
+  
