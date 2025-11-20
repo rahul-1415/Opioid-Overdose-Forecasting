@@ -91,6 +91,47 @@ VITE_API_BASE_URL=http://localhost:8000 npm run dev
 
 ---
 
+
+## 🚀 Deployment to AWS EC2 (Docker Host)
+
+Run the exact same Docker image on a single EC2 instance instead of Elastic Beanstalk. The repo now ships with `deploy/ec2/docker-compose.yml` and a helper script so the instance behaves like a lightweight PaaS.
+
+1) **Provision the instance**
+   - Use Ubuntu 22.04 LTS (t3.micro fits in the free tier).
+   - Add a security group rule for inbound HTTP (80) and, optionally, HTTPS (443).
+
+2) **Install Docker + Compose plugin**
+```bash
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker $USER  # allow current user to run docker
+newgrp docker                  # start a new shell with the updated group
+```
+
+3) **Clone and deploy**
+```bash
+git clone https://github.com/your-username/Opioid-Overdose-Forecasting-Data-Visualizer.git
+cd Opioid-Overdose-Forecasting-Data-Visualizer
+./deploy/ec2/deploy.sh
+```
+- The compose file builds from the root `Dockerfile`, maps host port 80 → container 8080, and restarts the container after reboots (`restart: unless-stopped`).
+
+4) **Verify**
+```bash
+curl http://<EC2-PUBLIC-IP>/get_data
+```
+
+Because the Docker image already includes the built frontend assets, visiting `http://<EC2-PUBLIC-IP>` serves both the UI and the API from the same host. If you prefer to keep Netlify (or any other static host) for the frontend, set `VITE_API_BASE_URL=http://<EC2-PUBLIC-IP>` and redeploy the static site.
+
+Production tips:
+- Attach an Elastic IP or behind an ALB to keep the URL stable.
+- Add TLS with AWS Certificate Manager + ALB or by installing Nginx/Traefik on the instance and terminating HTTPS there.
+- CloudWatch Agent or a simple cron `docker compose logs --tail 100` redirect can help capture logs.
+- For zero-downtime upgrades, run the deploy script after pulling the latest `main`—Compose rebuilds and restarts the container in place.
+
+---
+
+
 ## 🧱 Tech Stack
 
 - **Frontend:** React, TypeScript, React-Leaflet, CSS

@@ -10,6 +10,7 @@ WORKDIR /app
 
 # System deps for GeoPandas/Fiona/PROJ on slim images
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential python3-dev \
     gdal-bin libgdal-dev libproj-dev proj-data proj-bin \
  && rm -rf /var/lib/apt/lists/*
 

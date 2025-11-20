@@ -1,5 +1,6 @@
 from functools import lru_cache
 import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 import fiona
@@ -8,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+
 
 app = FastAPI()
 
@@ -25,10 +28,13 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 @lru_cache(maxsize=1)
 def load_geojson() -> Dict[str, Any]:
-    """Load GeoJSON once as plain dicts to reduce memory vs GeoPandas objects."""
-    with fiona.open("arizona_data.geojson") as src:
-        features: List[Dict[str, Any]] = [feat for feat in src]
-    return {"type": "FeatureCollection", "features": features}
+    """Load GeoJSON once as plain dicts."""
+    data_path = Path(__file__).resolve().parent.parent / "arizona_data.geojson"
+    print("✅ Loading GeoJSON from:", data_path)
+    with data_path.open("r") as f:
+        data = json.load(f)
+    return data
+
 
 
 @app.get("/get_data")
