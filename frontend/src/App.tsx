@@ -1,87 +1,24 @@
-// import { useEffect, useState } from "react";
-// import MapComponent from "./components/MapComponent";
-// import NeighborhoodSidebar from "./components/NeighborhoodSidebar";
-// import Filters from "./components/Filters";
-// import "./styles/App.css";
-
-// function App() {
-//   const [geoData, setGeoData] = useState(null);
-//   const [selectedFeature, setSelectedFeature] = useState(null);
-//   const [selectedCounty, setSelectedCounty] = useState("All");
-//   const [selectedZip, setSelectedZip] = useState("All");
-
-//   useEffect(() => {
-//     fetchData();
-//   }, [selectedCounty, selectedZip]);
-
-//   const fetchData = async () => {
-//     const isDefault = selectedCounty === "All" && selectedZip === "All";
-//     const url = new URL(
-//       isDefault ? "/get_data" : "/filter",
-//       window.location.origin
-//     );
-
-//     if (!isDefault) {
-//       url.searchParams.append("county", selectedCounty);
-//       url.searchParams.append("zip_code", selectedZip);
-//     }
-
-//     try {
-//       const res = await fetch(url.toString(), {
-//         method: "GET",
-//         headers: {
-//           "Content-Type": "application/json",
-//         }
-//       });
-
-//       if (!res.ok) {
-//         console.error("Failed to fetch data:", res.status, res.statusText);
-//         return;
-//       }
-
-//       const data = await res.json();
-//       setGeoData(data);
-//     } catch (error) {
-//       console.error("Error fetching data:", error);
-//     }
-//   };
-
-//   return (
-//     <div className="app">
-//       <div className="header">
-//         <h1>Neighborhoods at Risk of Overdose in Arizona</h1>
-//         <Filters
-//           selectedCounty={selectedCounty}
-//           selectedZip={selectedZip}
-//           onCountyChange={setSelectedCounty}
-//           onZipChange={setSelectedZip}
-//         />
-//       </div>
-
-//       <div className="content">
-//         <MapComponent
-//           geoData={geoData}
-//           onFeatureClick={setSelectedFeature}
-//           selectedFeature={selectedFeature}
-//         />
-//         <NeighborhoodSidebar feature={selectedFeature} />
-//       </div>
-//     </div>
-//   );
-// }
-
-// export default App;
-
-
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MapComponent from "./components/MapComponent";
 import NeighborhoodSidebar from "./components/NeighborhoodSidebar";
 import Filters from "./components/Filters";
 import "./styles/App.css";
 
+type GeoFeature = {
+  properties?: {
+    COUNTYFP?: string | number;
+    GEOID?: string | number;
+  } & Record<string, unknown>;
+};
+
+type GeoFeatureCollection = {
+  type: string;
+  features: GeoFeature[];
+};
+
 function App() {
-  const [geoData, setGeoData] = useState(null);
-  const [selectedFeature, setSelectedFeature] = useState(null);  // for clicked CBG
+  const [allGeoData, setAllGeoData] = useState<GeoFeatureCollection | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState(null);
   const [selectedCounty, setSelectedCounty] = useState("All");
   const [selectedZip, setSelectedZip] = useState("All");
   const [zipOptions, setZipOptions] = useState<string[]>([]);
@@ -93,63 +30,88 @@ function App() {
       : window.location.origin);
 
   useEffect(() => {
-    fetchData();
-  }, [selectedCounty, selectedZip]);
+    const fetchAllData = async () => {
+      try {
+        const res = await fetch(new URL("/get_data", API_BASE).toString(), {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-  useEffect(() => {
-    fetch(new URL("/zipcodes", API_BASE))
-      .then((res) => res.json())
-      .then((data) => setZipOptions(data))
-      .catch((err) => console.error("Failed to load ZIP codes:", err));
-  }, []);
+        if (!res.ok) {
+          console.error("Failed to fetch data:", res.status, res.statusText);
+          return;
+        }
 
-  const fetchData = async () => {
-    const isDefault = selectedCounty === "All" && selectedZip === "All";
-    const url = new URL(isDefault ? "/get_data" : "/filter", API_BASE);
+        const data = (await res.json()) as GeoFeatureCollection;
+        setAllGeoData(data);
 
-    if (!isDefault) {
-      url.searchParams.append("county", selectedCounty);
-      url.searchParams.append("zip_code", selectedZip);
+        const uniqueZips = new Set<string>();
+        for (const feat of data.features || []) {
+          const geoid = String(feat?.properties?.GEOID ?? "");
+          if (geoid.length >= 10 && geoid.slice(0, 5).match(/^\d{5}$/)) {
+            uniqueZips.add(geoid.slice(5, 10));
+          }
+        }
+        setZipOptions(Array.from(uniqueZips).sort());
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    fetchAllData();
+  }, [API_BASE]);
+
+  const geoData = useMemo(() => {
+    if (!allGeoData) {
+      return null;
     }
 
-    try {
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+    if (selectedCounty === "All" && selectedZip === "All") {
+      return allGeoData;
+    }
 
-      if (!res.ok) {
-        console.error("Failed to fetch data:", res.status, res.statusText);
-        return;
+    const filteredFeatures = (allGeoData.features || []).filter((feat) => {
+      const props = feat?.properties ?? {};
+      const countyCode = String(props.COUNTYFP ?? "");
+      const geoid = String(props.GEOID ?? "");
+      const geoidZip = geoid.slice(5, 10);
+
+      if (selectedCounty !== "All" && countyCode !== selectedCounty) {
+        return false;
       }
 
-      const data = await res.json();
-      setGeoData(data);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+      if (selectedZip !== "All" && geoidZip !== selectedZip) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return {
+      type: "FeatureCollection",
+      features: filteredFeatures,
+    } as GeoFeatureCollection;
+  }, [allGeoData, selectedCounty, selectedZip]);
 
   return (
     <div className="app">
       <div className="header">
         <h1>Neighborhoods at Risk of Overdose in Arizona</h1>
         <Filters
-  selectedCounty={selectedCounty}
-  selectedZip={selectedZip}
-  zipOptions={zipOptions}
-  onCountyChange={(county) => {
-    setSelectedCounty(county);
-    setSelectedFeature(null);  // ✅ Clear the highlighted CBG
-  }}
-  onZipChange={(zip) => {
-    setSelectedZip(zip);
-    setSelectedFeature(null);  // ✅ Clear on ZIP filter change too
-  }}
-/>
-
+          selectedCounty={selectedCounty}
+          selectedZip={selectedZip}
+          zipOptions={zipOptions}
+          onCountyChange={(county) => {
+            setSelectedCounty(county);
+            setSelectedFeature(null);
+          }}
+          onZipChange={(zip) => {
+            setSelectedZip(zip);
+            setSelectedFeature(null);
+          }}
+        />
       </div>
 
       <div className="content">

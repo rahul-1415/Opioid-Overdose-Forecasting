@@ -1,12 +1,13 @@
 from functools import lru_cache
 import json
 from pathlib import Path
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 
@@ -31,8 +32,8 @@ def healthz():
 
 
 @lru_cache(maxsize=1)
-def load_geojson() -> Dict[str, Any]:
-    """Load GeoJSON once as plain dicts."""
+def resolve_geojson_path() -> Path:
+    """Resolve the GeoJSON file path once."""
     # Try both root and backend locations so deployments don't break if the file moves.
     candidates = [
         Path(__file__).resolve().parent / "arizona_data.geojson",
@@ -42,20 +43,58 @@ def load_geojson() -> Dict[str, Any]:
     for data_path in candidates:
         if data_path.exists():
             print("✅ Loading GeoJSON from:", data_path)
-            with data_path.open("r") as f:
-                return json.load(f)
+            return data_path
 
     raise FileNotFoundError(
         f"arizona_data.geojson not found. Tried: {', '.join(str(p) for p in candidates)}"
     )
 
 
+@lru_cache(maxsize=1)
+def load_geojson() -> Dict[str, Any]:
+    """Load GeoJSON once as plain dicts."""
+    geojson_path = resolve_geojson_path()
+    print("✅ Loading GeoJSON into memory from:", geojson_path)
+    with geojson_path.open("r") as f:
+        return json.load(f)
+
+
+@lru_cache(maxsize=1)
+def load_zipcodes() -> List[str]:
+    """
+    Parse GEOID values in a streaming way to avoid loading the full JSON structure.
+    This keeps memory use lower on small Render instances.
+    """
+    geojson_path = resolve_geojson_path()
+    geoid_pattern = re.compile(rb'"GEOID"\s*:\s*"?(\d{10,})"?')
+    unique_zips = set()
+    tail = b""
+
+    with geojson_path.open("rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+
+            data = tail + chunk
+            for match in geoid_pattern.finditer(data):
+                geoid = match.group(1).decode("utf-8", errors="ignore")
+                if geoid[:5].isdigit() and len(geoid) >= 10:
+                    unique_zips.add(geoid[5:10])
+
+            # Keep a small overlap so boundary-spanning matches are not missed.
+            tail = data[-64:]
+
+    return sorted(unique_zips)
+
+
 
 @app.get("/get_data")
 def get_data():
     try:
-        data = load_geojson()
-        return JSONResponse(content=data)
+        geojson_path = resolve_geojson_path()
+        # Return the file directly to avoid loading/parsing the full document in memory.
+        return FileResponse(geojson_path, media_type="application/json")
     except Exception as e:
         print("❌ Failed to load GeoJSON:", e)
         return JSONResponse(
@@ -76,7 +115,8 @@ def filter_data(county: str = "All", zip_code: str = "All", variable: str = "lif
         props = feat.get("properties", {})
         if county != "All" and props.get("COUNTYFP") != county:
             continue
-        if zip_code != "All" and not str(props.get("GEOID", "")).startswith(zip_code):
+        geoid = str(props.get("GEOID", ""))
+        if zip_code != "All" and geoid[5:10] != zip_code:
             continue
         filtered.append(feat)
 
@@ -89,19 +129,10 @@ def filter_data(county: str = "All", zip_code: str = "All", variable: str = "lif
 @app.get("/zipcodes")
 def get_zipcodes():
     try:
-        data = load_geojson()
+        return load_zipcodes()
     except Exception as e:
         print("❌ Failed to load GeoJSON:", e)
         return []
-
-    unique_zips = sorted(
-        {
-            str(feat.get("properties", {}).get("GEOID", ""))[5:10]
-            for feat in data["features"]
-            if str(feat.get("properties", {}).get("GEOID", ""))[:5].isdigit()
-        }
-    )
-    return unique_zips
 
 
 # Serve built frontend if present
