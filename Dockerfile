@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy backend code and geojson file
 COPY backend/ ./backend/
-COPY backend/arizona_data.geojson ./arizona_data.geojson
 
 # Install dependencies
 RUN pip install --no-cache-dir -r backend/requirements.txt
