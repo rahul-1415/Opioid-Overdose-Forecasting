@@ -6,6 +6,13 @@ import type { FeatureProperties, MapFeature, MapFeatureCollection } from "./type
 import "./styles/App.css";
 
 function App() {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof window === "undefined") {
+      return "dark";
+    }
+    const savedTheme = window.localStorage.getItem("theme");
+    return savedTheme === "light" ? "light" : "dark";
+  });
   const [allGeoData, setAllGeoData] = useState<MapFeatureCollection | null>(null);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<FeatureProperties | null>(null);
@@ -25,6 +32,11 @@ function App() {
     (import.meta.env.MODE === "development"
       ? "http://localhost:8000"
       : window.location.origin);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -188,7 +200,23 @@ function App() {
       </p>
 
       <header className="header">
-        <p className="eyebrow">Arizona Opioid Risk Explorer</p>
+        <div className="header-top">
+          <p className="eyebrow">Arizona Opioid Risk Explorer</p>
+          <label className="theme-toggle" htmlFor="theme-toggle">
+            <span className="theme-toggle-text">Dark</span>
+            <input
+              id="theme-toggle"
+              type="checkbox"
+              checked={theme === "light"}
+              onChange={(event) => setTheme(event.target.checked ? "light" : "dark")}
+              aria-label="Toggle light and dark color mode"
+            />
+            <span className="theme-toggle-track" aria-hidden="true">
+              <span className="theme-toggle-thumb" />
+            </span>
+            <span className="theme-toggle-text">Light</span>
+          </label>
+        </div>
         <h1>Neighborhoods at Risk of Overdose in Arizona</h1>
         <p className="subheading">
           Use county and ZIP filters to focus the map, then select a block group to view detailed
