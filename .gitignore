@@ -130,6 +130,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-local/
 env/
 venv/
 ENV/
@@ -176,3 +177,7 @@ cython_debug/
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# Generated GeoJSON optimization artifacts (built at runtime/image build)
+backend/arizona_data.map.geojson
+backend/*.geojson.gz

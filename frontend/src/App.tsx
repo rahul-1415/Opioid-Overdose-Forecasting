@@ -4,10 +4,13 @@ import NeighborhoodSidebar from "./components/NeighborhoodSidebar";
 import Filters from "./components/Filters";
 import "./styles/App.css";
 
+type FeatureProperties = Record<string, unknown>;
+
 type GeoFeature = {
   properties?: {
     COUNTYFP?: string | number;
     GEOID?: string | number;
+    total_dosage?: number;
   } & Record<string, unknown>;
 };
 
@@ -18,7 +21,8 @@ type GeoFeatureCollection = {
 
 function App() {
   const [allGeoData, setAllGeoData] = useState<GeoFeatureCollection | null>(null);
-  const [selectedFeature, setSelectedFeature] = useState(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<FeatureProperties | null>(null);
   const [selectedCounty, setSelectedCounty] = useState("All");
   const [selectedZip, setSelectedZip] = useState("All");
   const [zipOptions, setZipOptions] = useState<string[]>([]);
@@ -32,29 +36,32 @@ function App() {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        const res = await fetch(new URL("/get_data", API_BASE).toString(), {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+        const mapUrl = new URL("/map_data", API_BASE).toString();
+        const zipUrl = new URL("/zipcodes", API_BASE).toString();
+        const [mapRes, zipRes] = await Promise.all([fetch(mapUrl), fetch(zipUrl)]);
 
-        if (!res.ok) {
-          console.error("Failed to fetch data:", res.status, res.statusText);
+        if (!mapRes.ok) {
+          console.error("Failed to fetch map data:", mapRes.status, mapRes.statusText);
           return;
         }
 
-        const data = (await res.json()) as GeoFeatureCollection;
+        const data = (await mapRes.json()) as GeoFeatureCollection;
         setAllGeoData(data);
 
-        const uniqueZips = new Set<string>();
-        for (const feat of data.features || []) {
-          const geoid = String(feat?.properties?.GEOID ?? "");
-          if (geoid.length >= 10 && geoid.slice(0, 5).match(/^\d{5}$/)) {
-            uniqueZips.add(geoid.slice(5, 10));
+        if (zipRes.ok) {
+          const zips = (await zipRes.json()) as string[];
+          setZipOptions(zips);
+        } else {
+          // Fallback for environments where /zipcodes is unavailable.
+          const uniqueZips = new Set<string>();
+          for (const feat of data.features || []) {
+            const geoid = String(feat?.properties?.GEOID ?? "");
+            if (geoid.length >= 10 && geoid.slice(0, 5).match(/^\d{5}$/)) {
+              uniqueZips.add(geoid.slice(5, 10));
+            }
           }
+          setZipOptions(Array.from(uniqueZips).sort());
         }
-        setZipOptions(Array.from(uniqueZips).sort());
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -62,6 +69,38 @@ function App() {
 
     fetchAllData();
   }, [API_BASE]);
+
+  useEffect(() => {
+    if (!selectedFeatureId) {
+      setSelectedFeature(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const featureUrl = new URL(`/feature/${selectedFeatureId}`, API_BASE).toString();
+
+    const fetchFeature = async () => {
+      try {
+        const res = await fetch(featureUrl, { signal: controller.signal });
+        if (!res.ok) {
+          console.error("Failed to fetch feature details:", res.status, res.statusText);
+          setSelectedFeature(null);
+          return;
+        }
+
+        const featureProps = (await res.json()) as FeatureProperties;
+        setSelectedFeature(featureProps);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.error("Error fetching feature details:", error);
+        }
+      }
+    };
+
+    fetchFeature();
+
+    return () => controller.abort();
+  }, [API_BASE, selectedFeatureId]);
 
   const geoData = useMemo(() => {
     if (!allGeoData) {
@@ -106,10 +145,12 @@ function App() {
           onCountyChange={(county) => {
             setSelectedCounty(county);
             setSelectedFeature(null);
+            setSelectedFeatureId(null);
           }}
           onZipChange={(zip) => {
             setSelectedZip(zip);
             setSelectedFeature(null);
+            setSelectedFeatureId(null);
           }}
         />
       </div>
@@ -117,9 +158,10 @@ function App() {
       <div className="content">
         <MapComponent
           geoData={geoData}
-          onFeatureClick={setSelectedFeature}
-          selectedFeature={selectedFeature}
+          onFeatureClick={setSelectedFeatureId}
+          selectedFeatureId={selectedFeatureId}
           selectedCounty={selectedCounty}
+          selectedZip={selectedZip}
         />
         <NeighborhoodSidebar feature={selectedFeature} />
       </div>

@@ -15,6 +15,40 @@ Opioid-Overdose-Forecasting-Data-Visualizer/
 ├── Dockerfile            # Unified container for frontend and backend
 ```
 
+## ⚡ Performance Improvements (2026-02-27)
+
+To reduce initial frontend load time, the data-loading pipeline was optimized:
+
+1) **Split initial map payload from full feature payload**
+   - Added `GET /map_data` to return only map-required properties (`GEOID`, `COUNTYFP`, `total_dosage`) plus geometry.
+   - Frontend now loads `/map_data` for first render, not the full dataset.
+
+2) **Lazy-load sidebar details**
+   - Added `GET /feature/{geoid}` for on-demand full property fetch after a user clicks a block group.
+   - Sidebar no longer requires downloading all 238 properties for all 4,773 features up front.
+
+3) **Serve compressed responses with cache headers**
+   - Large GeoJSON responses are served as prebuilt gzip when client supports gzip.
+   - Added `Cache-Control: public, max-age=86400` and `Vary: Accept-Encoding` for better repeat-load performance.
+
+4) **Prebuild optimized artifacts during Docker image build**
+   - Docker build now generates:
+     - lightweight map file: `backend/arizona_data.map.geojson`
+     - gzip files: `backend/*.geojson.gz`
+   - This avoids first-request preprocessing cost in production containers.
+
+5) **Map rendering optimization**
+   - Enabled Leaflet canvas rendering (`preferCanvas`) and updated selection flow to reduce map rework on interactions.
+
+### Payload Size Impact
+
+- Full dataset (raw): `58,037,781` bytes
+- Full dataset (gzip): `12,930,053` bytes
+- Map dataset (raw): `31,762,050` bytes
+- Map dataset (gzip): `8,344,012` bytes
+
+This reduces initial map payload transfer by roughly **86%** compared to the old raw full-file load path.
+
 ## ⚙️ How to Run Locally
 
 ### 1. Clone the Repository

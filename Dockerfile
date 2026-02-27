@@ -17,6 +17,47 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy backend code and geojson file
 COPY backend/ ./backend/
 
+# Build lightweight map dataset and gzip artifacts during image build.
+# This avoids runtime preprocessing on the first user request.
+RUN python - <<'PY'
+import gzip
+import json
+import shutil
+from pathlib import Path
+
+data_path = Path("backend/arizona_data.geojson")
+map_path = data_path.with_name(f"{data_path.stem}.map.geojson")
+
+with data_path.open("r") as f:
+    data = json.load(f)
+
+map_features = []
+for feat in data.get("features", []):
+    props = feat.get("properties", {})
+    map_features.append(
+        {
+            "type": "Feature",
+            "properties": {
+                "COUNTYFP": str(props.get("COUNTYFP", "")),
+                "GEOID": str(props.get("GEOID", "")),
+                "total_dosage": props.get("total_dosage", 0),
+            },
+            "geometry": feat.get("geometry"),
+        }
+    )
+
+with map_path.open("w") as f:
+    json.dump({"type": "FeatureCollection", "features": map_features}, f, separators=(",", ":"))
+
+for source_path in (data_path, map_path):
+    gzip_path = source_path.with_suffix(source_path.suffix + ".gz")
+    with source_path.open("rb") as source_file, gzip_path.open("wb") as gzip_file:
+        with gzip.GzipFile(
+            filename="", mode="wb", fileobj=gzip_file, compresslevel=6, mtime=0
+        ) as compressor:
+            shutil.copyfileobj(source_file, compressor, length=1024 * 1024)
+PY
+
 # Install dependencies
 RUN pip install --no-cache-dir -r backend/requirements.txt
 

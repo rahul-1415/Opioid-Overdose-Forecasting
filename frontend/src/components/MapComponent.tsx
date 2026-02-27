@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 
 interface Props {
   geoData: any;
-  onFeatureClick: (feature: any) => void;
-  selectedFeature: any;
+  onFeatureClick: (geoid: string) => void;
+  selectedFeatureId: string | null;
   selectedCounty: string;
+  selectedZip: string;
 }
 
 const getColor = (totalDosage: number) => {
@@ -24,15 +25,18 @@ const getColor = (totalDosage: number) => {
 const MapComponent: React.FC<Props> = ({
   geoData,
   onFeatureClick,
-  selectedFeature,
+  selectedFeatureId,
   selectedCounty,
+  selectedZip,
 }) => {
   const mapRef = useRef<any>(null);
 
   const getStyle = (feature: any) => {
-    const totalDosage = feature.properties.total_dosage || 0;
-    const countyCode = feature.properties.COUNTYFP;
-    const isSelectedCBG = selectedFeature?.GEOID === feature.properties.GEOID;
+    const props = feature?.properties ?? {};
+    const totalDosage = Number(props.total_dosage || 0);
+    const countyCode = String(props.COUNTYFP ?? "");
+    const geoid = String(props.GEOID ?? "");
+    const isSelectedCBG = selectedFeatureId === geoid;
 
     const baseStyle = {
       fillColor: getColor(totalDosage),
@@ -87,16 +91,19 @@ const MapComponent: React.FC<Props> = ({
   const onEachFeature = (feature: any, layer: any) => {
     layer.setStyle(getStyle(feature));
 
-    if (selectedFeature?.GEOID === feature.properties.GEOID) {
+    if (selectedFeatureId === String(feature?.properties?.GEOID ?? "")) {
       layer.bringToFront();
     }
 
     layer.on({
       click: () => {
-        onFeatureClick(feature.properties);
+        const geoid = String(feature?.properties?.GEOID ?? "");
+        if (geoid) {
+          onFeatureClick(geoid);
+        }
       },
       mouseover: (e) => {
-        if (feature.properties.GEOID !== selectedFeature?.GEOID) {
+        if (String(feature?.properties?.GEOID ?? "") !== selectedFeatureId) {
           const layer = e.target;
           layer.setStyle({
             weight: 2,
@@ -131,13 +138,14 @@ const MapComponent: React.FC<Props> = ({
     <MapContainer
       center={[34.05, -111.09]}
       zoom={7}
+      preferCanvas={true}
       style={{ height: "80vh", width: "60vw" }}
       ref={mapRef}
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {geoData && (
         <GeoJSON
-          key={`${selectedCounty}-${selectedFeature?.GEOID ?? "none"}-${geoData.features?.length}`}
+          key={`${selectedCounty}-${selectedZip}-${geoData.features?.length}`}
           data={geoData}
           onEachFeature={onEachFeature}
         />

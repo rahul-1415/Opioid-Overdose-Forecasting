@@ -1,10 +1,13 @@
 from functools import lru_cache
+import gzip
 import json
 from pathlib import Path
 import re
+import shutil
+import threading
 from typing import Any, Dict, List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -13,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 
 
 app = FastAPI()
+STATIC_CACHE_MAX_AGE_SECONDS = 60 * 60 * 24
+_BUILD_LOCK = threading.Lock()
 
 # CORS (wide open for demo; tighten for production)
 app.add_middleware(
@@ -50,6 +55,44 @@ def resolve_geojson_path() -> Path:
     )
 
 
+def _build_gzip_file(source_path: Path) -> Path:
+    """Build a stable gzip artifact for static file responses."""
+    gzip_path = source_path.with_suffix(source_path.suffix + ".gz")
+    source_mtime = source_path.stat().st_mtime
+    needs_build = not gzip_path.exists() or gzip_path.stat().st_mtime < source_mtime
+
+    if not needs_build:
+        return gzip_path
+
+    with _BUILD_LOCK:
+        needs_build = not gzip_path.exists() or gzip_path.stat().st_mtime < source_mtime
+        if not needs_build:
+            return gzip_path
+
+        print("✅ Building gzip cache:", gzip_path)
+        with source_path.open("rb") as source_file, gzip_path.open("wb") as gzip_file:
+            with gzip.GzipFile(
+                filename="", mode="wb", fileobj=gzip_file, compresslevel=6, mtime=0
+            ) as compressor:
+                shutil.copyfileobj(source_file, compressor, length=1024 * 1024)
+
+    return gzip_path
+
+
+def _cache_headers(content_encoding: str | None = None) -> Dict[str, str]:
+    headers = {
+        "Cache-Control": f"public, max-age={STATIC_CACHE_MAX_AGE_SECONDS}",
+        "Vary": "Accept-Encoding",
+    }
+    if content_encoding:
+        headers["Content-Encoding"] = content_encoding
+    return headers
+
+
+def _client_accepts_gzip(request: Request) -> bool:
+    return "gzip" in request.headers.get("accept-encoding", "").lower()
+
+
 @lru_cache(maxsize=1)
 def load_geojson() -> Dict[str, Any]:
     """Load GeoJSON once as plain dicts."""
@@ -57,6 +100,50 @@ def load_geojson() -> Dict[str, Any]:
     print("✅ Loading GeoJSON into memory from:", geojson_path)
     with geojson_path.open("r") as f:
         return json.load(f)
+
+
+@lru_cache(maxsize=1)
+def resolve_map_geojson_path() -> Path:
+    """
+    Build a lightweight GeoJSON with only fields needed for the map and filters.
+    This significantly reduces initial payload size for frontend boot.
+    """
+    source_path = resolve_geojson_path()
+    map_path = source_path.with_name(f"{source_path.stem}.map.geojson")
+    source_mtime = source_path.stat().st_mtime
+    needs_build = not map_path.exists() or map_path.stat().st_mtime < source_mtime
+
+    if not needs_build:
+        return map_path
+
+    with _BUILD_LOCK:
+        needs_build = not map_path.exists() or map_path.stat().st_mtime < source_mtime
+        if not needs_build:
+            return map_path
+
+        print("✅ Building lightweight map GeoJSON at:", map_path)
+        data = load_geojson()
+        map_features = []
+
+        for feat in data.get("features", []):
+            props = feat.get("properties", {})
+            map_features.append(
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "COUNTYFP": str(props.get("COUNTYFP", "")),
+                        "GEOID": str(props.get("GEOID", "")),
+                        "total_dosage": props.get("total_dosage", 0),
+                    },
+                    "geometry": feat.get("geometry"),
+                }
+            )
+
+        map_payload = {"type": "FeatureCollection", "features": map_features}
+        with map_path.open("w") as out_file:
+            json.dump(map_payload, out_file, separators=(",", ":"))
+
+    return map_path
 
 
 @lru_cache(maxsize=1)
@@ -90,15 +177,60 @@ def load_zipcodes() -> List[str]:
 
 
 @app.get("/get_data")
-def get_data():
+def get_data(request: Request):
     try:
-        geojson_path = resolve_geojson_path()
-        # Return the file directly to avoid loading/parsing the full document in memory.
-        return FileResponse(geojson_path, media_type="application/json")
+        source_path = resolve_geojson_path()
+        if _client_accepts_gzip(request):
+            try:
+                gzip_path = _build_gzip_file(source_path)
+                return FileResponse(
+                    gzip_path,
+                    media_type="application/json",
+                    headers=_cache_headers(content_encoding="gzip"),
+                )
+            except Exception as gzip_error:
+                print("⚠️ Falling back to uncompressed GeoJSON:", gzip_error)
+
+        return FileResponse(
+            source_path,
+            media_type="application/json",
+            headers=_cache_headers(),
+        )
     except Exception as e:
         print("❌ Failed to load GeoJSON:", e)
         return JSONResponse(
             content={"error": "GeoJSON failed to load."}, status_code=500
+        )
+
+
+@app.get("/map_data")
+def get_map_data(request: Request):
+    try:
+        try:
+            map_geojson_path = resolve_map_geojson_path()
+        except Exception as map_error:
+            # If map artifact cannot be built, keep endpoint functional with full data.
+            print("⚠️ Falling back to full GeoJSON for /map_data:", map_error)
+            map_geojson_path = resolve_geojson_path()
+
+        if _client_accepts_gzip(request):
+            try:
+                gzip_path = _build_gzip_file(map_geojson_path)
+                return FileResponse(
+                    gzip_path,
+                    media_type="application/json",
+                    headers=_cache_headers(content_encoding="gzip"),
+                )
+            except Exception as gzip_error:
+                print("⚠️ Falling back to uncompressed map GeoJSON:", gzip_error)
+
+        return FileResponse(
+            map_geojson_path, media_type="application/json", headers=_cache_headers()
+        )
+    except Exception as e:
+        print("❌ Failed to load map GeoJSON:", e)
+        return JSONResponse(
+            content={"error": "Map GeoJSON failed to load."}, status_code=500
         )
 
 
@@ -124,6 +256,23 @@ def filter_data(county: str = "All", zip_code: str = "All", variable: str = "lif
         return JSONResponse(content={"error": "No data found"}, status_code=404)
 
     return JSONResponse(content={"type": "FeatureCollection", "features": filtered})
+
+
+@app.get("/feature/{geoid}")
+def get_feature(geoid: str):
+    try:
+        data = load_geojson()
+    except Exception as e:
+        print("❌ Failed to load GeoJSON:", e)
+        return JSONResponse(content={"error": "GeoJSON failed to load."}, status_code=500)
+
+    target_geoid = str(geoid)
+    for feat in data.get("features", []):
+        props = feat.get("properties", {})
+        if str(props.get("GEOID", "")) == target_geoid:
+            return JSONResponse(content=props)
+
+    return JSONResponse(content={"error": "Feature not found"}, status_code=404)
 
 
 @app.get("/zipcodes")
