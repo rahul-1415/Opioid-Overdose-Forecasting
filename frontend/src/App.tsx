@@ -2,30 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import MapComponent from "./components/MapComponent";
 import NeighborhoodSidebar from "./components/NeighborhoodSidebar";
 import Filters from "./components/Filters";
+import type { FeatureProperties, MapFeature, MapFeatureCollection } from "./types/geo";
 import "./styles/App.css";
 
-type FeatureProperties = Record<string, unknown>;
-
-type GeoFeature = {
-  properties?: {
-    COUNTYFP?: string | number;
-    GEOID?: string | number;
-    total_dosage?: number;
-  } & Record<string, unknown>;
-};
-
-type GeoFeatureCollection = {
-  type: string;
-  features: GeoFeature[];
-};
-
 function App() {
-  const [allGeoData, setAllGeoData] = useState<GeoFeatureCollection | null>(null);
+  const [allGeoData, setAllGeoData] = useState<MapFeatureCollection | null>(null);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<FeatureProperties | null>(null);
   const [selectedCounty, setSelectedCounty] = useState("All");
   const [selectedZip, setSelectedZip] = useState("All");
   const [zipOptions, setZipOptions] = useState<string[]>([]);
+  const [zipQuery, setZipQuery] = useState("");
+  const [isMapLoading, setIsMapLoading] = useState(true);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
+  const [isZipLoading, setIsZipLoading] = useState(true);
+  const [isFeatureLoading, setIsFeatureLoading] = useState(false);
+  const [featureLoadError, setFeatureLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const API_BASE =
     import.meta.env.VITE_API_BASE_URL ||
@@ -34,23 +27,35 @@ function App() {
       : window.location.origin);
 
   useEffect(() => {
+    let isCancelled = false;
+
     const fetchAllData = async () => {
+      setIsMapLoading(true);
+      setIsZipLoading(true);
+      setMapLoadError(null);
+
       try {
         const mapUrl = new URL("/map_data", API_BASE).toString();
-        const zipUrl = new URL("/zipcodes", API_BASE).toString();
-        const [mapRes, zipRes] = await Promise.all([fetch(mapUrl), fetch(zipUrl)]);
+        const mapRes = await fetch(mapUrl);
 
         if (!mapRes.ok) {
-          console.error("Failed to fetch map data:", mapRes.status, mapRes.statusText);
-          return;
+          throw new Error(`Map data request failed with status ${mapRes.status}`);
         }
 
-        const data = (await mapRes.json()) as GeoFeatureCollection;
+        const data = (await mapRes.json()) as MapFeatureCollection;
+        if (isCancelled) {
+          return;
+        }
         setAllGeoData(data);
+
+        const zipUrl = new URL("/zipcodes", API_BASE).toString();
+        const zipRes = await fetch(zipUrl);
 
         if (zipRes.ok) {
           const zips = (await zipRes.json()) as string[];
-          setZipOptions(zips);
+          if (!isCancelled) {
+            setZipOptions(zips);
+          }
         } else {
           // Fallback for environments where /zipcodes is unavailable.
           const uniqueZips = new Set<string>();
@@ -60,19 +65,42 @@ function App() {
               uniqueZips.add(geoid.slice(5, 10));
             }
           }
-          setZipOptions(Array.from(uniqueZips).sort());
+          if (!isCancelled) {
+            setZipOptions(Array.from(uniqueZips).sort());
+          }
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching map data:", error);
+        if (!isCancelled) {
+          setMapLoadError(
+            "We could not load map data. Please check your connection and try again."
+          );
+          setAllGeoData(null);
+          setZipOptions([]);
+          setSelectedZip("All");
+          setSelectedFeatureId(null);
+          setSelectedFeature(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsMapLoading(false);
+          setIsZipLoading(false);
+        }
       }
     };
 
     fetchAllData();
-  }, [API_BASE]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [API_BASE, reloadKey]);
 
   useEffect(() => {
     if (!selectedFeatureId) {
       setSelectedFeature(null);
+      setIsFeatureLoading(false);
+      setFeatureLoadError(null);
       return;
     }
 
@@ -80,11 +108,15 @@ function App() {
     const featureUrl = new URL(`/feature/${selectedFeatureId}`, API_BASE).toString();
 
     const fetchFeature = async () => {
+      setIsFeatureLoading(true);
+      setFeatureLoadError(null);
+
       try {
         const res = await fetch(featureUrl, { signal: controller.signal });
         if (!res.ok) {
           console.error("Failed to fetch feature details:", res.status, res.statusText);
           setSelectedFeature(null);
+          setFeatureLoadError("Unable to load neighborhood details for this selection.");
           return;
         }
 
@@ -93,6 +125,11 @@ function App() {
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           console.error("Error fetching feature details:", error);
+          setFeatureLoadError("Unable to load neighborhood details for this selection.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsFeatureLoading(false);
         }
       }
     };
@@ -111,8 +148,8 @@ function App() {
       return allGeoData;
     }
 
-    const filteredFeatures = (allGeoData.features || []).filter((feat) => {
-      const props = feat?.properties ?? {};
+    const filteredFeatures = (allGeoData.features || []).filter((feat: MapFeature) => {
+      const props = feat.properties ?? {};
       const countyCode = String(props.COUNTYFP ?? "");
       const geoid = String(props.GEOID ?? "");
       const geoidZip = geoid.slice(5, 10);
@@ -131,41 +168,82 @@ function App() {
     return {
       type: "FeatureCollection",
       features: filteredFeatures,
-    } as GeoFeatureCollection;
+    } as MapFeatureCollection;
   }, [allGeoData, selectedCounty, selectedZip]);
 
+  const statusMessage = mapLoadError
+    ? mapLoadError
+    : isMapLoading
+      ? "Loading map and ZIP data."
+      : isFeatureLoading
+        ? "Loading neighborhood details."
+        : featureLoadError
+          ? featureLoadError
+          : "Map ready.";
+
   return (
-    <div className="app">
-      <div className="header">
+    <main className="app" role="main" aria-busy={isMapLoading}>
+      <p className="sr-live" aria-live="polite">
+        {statusMessage}
+      </p>
+
+      <header className="header">
+        <p className="eyebrow">Arizona Opioid Risk Explorer</p>
         <h1>Neighborhoods at Risk of Overdose in Arizona</h1>
+        <p className="subheading">
+          Use county and ZIP filters to focus the map, then select a block group to view detailed
+          social, health, and prescription indicators.
+        </p>
+
+        {mapLoadError && (
+          <div className="status-alert" role="alert">
+            <p>{mapLoadError}</p>
+            <button type="button" onClick={() => setReloadKey((prev) => prev + 1)}>
+              Retry loading data
+            </button>
+          </div>
+        )}
+
         <Filters
           selectedCounty={selectedCounty}
           selectedZip={selectedZip}
           zipOptions={zipOptions}
+          zipQuery={zipQuery}
+          isZipLoading={isZipLoading}
+          isZipDisabled={isMapLoading || !!mapLoadError}
           onCountyChange={(county) => {
             setSelectedCounty(county);
             setSelectedFeature(null);
             setSelectedFeatureId(null);
+            setFeatureLoadError(null);
           }}
           onZipChange={(zip) => {
             setSelectedZip(zip);
             setSelectedFeature(null);
             setSelectedFeatureId(null);
+            setFeatureLoadError(null);
           }}
+          onZipQueryChange={setZipQuery}
         />
-      </div>
+      </header>
 
-      <div className="content">
+      <section className="content" aria-label="Map and neighborhood details">
         <MapComponent
           geoData={geoData}
+          isLoading={isMapLoading}
+          mapLoadError={mapLoadError}
           onFeatureClick={setSelectedFeatureId}
           selectedFeatureId={selectedFeatureId}
           selectedCounty={selectedCounty}
           selectedZip={selectedZip}
         />
-        <NeighborhoodSidebar feature={selectedFeature} />
-      </div>
-    </div>
+        <NeighborhoodSidebar
+          feature={selectedFeature}
+          isLoading={isFeatureLoading}
+          errorMessage={featureLoadError}
+        />
+      </section>
+    </main>
   );
 }
 

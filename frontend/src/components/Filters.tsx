@@ -1,11 +1,15 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 interface Props {
   selectedCounty: string;
   selectedZip: string;
   onCountyChange: (val: string) => void;
   onZipChange: (val: string) => void;
+  onZipQueryChange: (val: string) => void;
   zipOptions: string[];
+  zipQuery: string;
+  isZipLoading: boolean;
+  isZipDisabled: boolean;
 }
 
 const Filters: React.FC<Props> = ({
@@ -13,13 +17,36 @@ const Filters: React.FC<Props> = ({
   selectedZip,
   onCountyChange,
   onZipChange,
-  zipOptions, 
+  onZipQueryChange,
+  zipOptions,
+  zipQuery,
+  isZipLoading,
+  isZipDisabled,
 }) => {
+  const filteredZipOptions = useMemo(() => {
+    const query = zipQuery.trim();
+    if (!query) {
+      return zipOptions;
+    }
+    return zipOptions.filter((zip) => zip.includes(query));
+  }, [zipOptions, zipQuery]);
+
+  const noZipOptionsAvailable = !isZipLoading && zipOptions.length === 0;
+  const noZipMatches = !isZipLoading && zipOptions.length > 0 && filteredZipOptions.length === 0;
+  const zipSelectDisabled = isZipDisabled || isZipLoading || noZipOptionsAvailable || noZipMatches;
+  const zipSelectValue =
+    selectedZip === "All" || filteredZipOptions.includes(selectedZip) ? selectedZip : "All";
+
   return (
     <div className="filters">
-      <div>
-        <label>Where do you want to look?</label>
-        <select value={selectedCounty} onChange={(e) => onCountyChange(e.target.value)}>
+      <div className="filter-field">
+        <label htmlFor="county-filter">Where do you want to look?</label>
+        <select
+          id="county-filter"
+          className="filter-select"
+          value={selectedCounty}
+          onChange={(e) => onCountyChange(e.target.value)}
+        >
           <option value="All">All Counties</option>
           <option value="001">Apache</option>
           <option value="003">Cochise</option>
@@ -39,15 +66,43 @@ const Filters: React.FC<Props> = ({
         </select>
       </div>
 
-      <div>
-        <label>Select ZIP Code</label>
-        <select value={selectedZip} onChange={(e) => onZipChange(e.target.value)}>
-          <option value="All">All ZIPs</option>
-          {zipOptions.map((zip) => (
-            <option key={zip} value={zip}>
-              {zip}
+      <div className="filter-field">
+        <label htmlFor="zip-search">Find ZIP quickly</label>
+        <input
+          id="zip-search"
+          type="text"
+          className="filter-input"
+          placeholder="Type a ZIP prefix (e.g., 850)"
+          value={zipQuery}
+          onChange={(e) => onZipQueryChange(e.target.value)}
+          disabled={isZipDisabled}
+        />
+
+        <label htmlFor="zip-filter">Select ZIP Code</label>
+        <select
+          id="zip-filter"
+          className="filter-select"
+          value={zipSelectValue}
+          onChange={(e) => onZipChange(e.target.value)}
+          disabled={zipSelectDisabled}
+        >
+          {isZipLoading && <option value="All">Loading ZIPs...</option>}
+          {noZipOptionsAvailable && <option value="All">No ZIPs available</option>}
+          {!isZipLoading && !noZipOptionsAvailable && (
+            <>
+              <option value="All">All ZIPs</option>
+              {filteredZipOptions.map((zip) => (
+                <option key={zip} value={zip}>
+                  {zip}
+                </option>
+              ))}
+            </>
+          )}
+          {noZipMatches && (
+            <option value="All" disabled>
+              No matching ZIPs
             </option>
-          ))}
+          )}
         </select>
       </div>
     </div>

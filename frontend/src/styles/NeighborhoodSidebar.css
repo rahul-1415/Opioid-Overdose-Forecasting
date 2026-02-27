@@ -1,22 +1,209 @@
-/* src/styles/NeighborhoodSidebar.css */
 .sidebar {
-    padding: 20px;
-    background-color: white;
-    border-left: 1px solid #ddd;
-    overflow-y: auto;
+  height: 100%;
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--radius-lg);
+  background: rgba(22, 31, 38, 0.78);
+  box-shadow: var(--shadow-heavy);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+}
+
+.sidebar h3 {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 700;
+  padding: 0.78rem 0.95rem;
+  border-bottom: 1px solid var(--stroke-soft);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-empty p {
+  margin: 0;
+  padding: 1rem;
+  color: var(--text-200);
+  line-height: 1.45;
+}
+
+.sidebar-loading {
+  padding: 1rem;
+}
+
+.sidebar-loading p {
+  margin: 0 0 0.85rem;
+  color: var(--text-200);
+  font-size: 0.92rem;
+}
+
+.skeleton-row {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
+  background-size: 220% 100%;
+  margin-bottom: 0.62rem;
+  animation: shimmer 1.3s linear infinite;
+}
+
+.sidebar-table-wrap {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sidebar-content {
+  padding: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+}
+
+.sidebar-highlights {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+  padding: 0.62rem;
+}
+
+.sidebar-highlights h4 {
+  margin: 0 0 0.48rem;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-cool);
+}
+
+.highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.46rem;
+}
+
+.highlight-item {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.5rem 0.55rem;
+}
+
+.highlight-item p {
+  margin: 0 0 0.2rem;
+  color: var(--text-200);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.highlight-item strong {
+  font-size: 0.92rem;
+  line-height: 1.2;
+  color: var(--text-100);
+  word-break: break-word;
+}
+
+.sidebar-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.52rem;
+}
+
+.sidebar-section {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.sidebar-section summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.52rem 0.66rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-100);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sidebar-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-section summary::after {
+  content: "+";
+  margin-left: 0.45rem;
+  font-size: 0.95rem;
+  color: var(--text-200);
+}
+
+.sidebar-section[open] summary::after {
+  content: "−";
+}
+
+.sidebar-section[open] summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.section-count {
+  min-width: 1.5rem;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.08rem 0.4rem;
+  color: var(--text-200);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.sidebar table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sidebar td {
+  padding: 0.5rem 0.68rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  vertical-align: top;
+}
+
+.sidebar tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sidebar td:first-child {
+  width: 62%;
+  color: var(--text-200);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.sidebar td:last-child {
+  color: var(--text-100);
+  font-size: 0.86rem;
+  font-feature-settings: "tnum";
+  word-break: break-word;
+}
+
+@media (max-width: 1080px) {
+  .sidebar {
+    min-height: 320px;
   }
-  
-  table {
-    width: 100%;
-    border-collapse: collapse;
+
+  .highlight-grid {
+    grid-template-columns: 1fr;
   }
-  
-  table td {
-    padding: 5px;
-    border-bottom: 1px solid #ddd;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
   }
-  
-  table tr:last-child td {
-    border-bottom: none;
+  100% {
+    background-position: -200% 0;
   }
-  
+}
