@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import MapComponent from "./components/MapComponent";
 import NeighborhoodSidebar from "./components/NeighborhoodSidebar";
 import Filters from "./components/Filters";
+import AnalyticsPanel from "./components/AnalyticsPanel";
 import type { FeatureProperties, MapFeature, MapFeatureCollection } from "./types/geo";
 import "./styles/App.css";
 
 function App() {
+  const [activeTab, setActiveTab] = useState<"explorer" | "analytics">("explorer");
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window === "undefined") {
       return "dark";
@@ -222,6 +224,26 @@ function App() {
           Use county and ZIP filters to focus the map, then select a block group to view detailed
           social, health, and prescription indicators.
         </p>
+        <div className="view-tabs" role="tablist" aria-label="Application views">
+          <button
+            type="button"
+            role="tab"
+            className={`view-tab ${activeTab === "explorer" ? "is-active" : ""}`}
+            aria-selected={activeTab === "explorer"}
+            onClick={() => setActiveTab("explorer")}
+          >
+            Explorer
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`view-tab ${activeTab === "analytics" ? "is-active" : ""}`}
+            aria-selected={activeTab === "analytics"}
+            onClick={() => setActiveTab("analytics")}
+          >
+            Analytics
+          </button>
+        </div>
 
         {mapLoadError && (
           <div className="status-alert" role="alert">
@@ -254,23 +276,32 @@ function App() {
           onZipQueryChange={setZipQuery}
         />
       </header>
-
-      <section className="content" aria-label="Map and neighborhood details">
-        <MapComponent
+      {activeTab === "explorer" ? (
+        <section className="content" aria-label="Map and neighborhood details">
+          <MapComponent
+            geoData={geoData}
+            isLoading={isMapLoading}
+            mapLoadError={mapLoadError}
+            onFeatureClick={setSelectedFeatureId}
+            selectedFeatureId={selectedFeatureId}
+            selectedCounty={selectedCounty}
+            selectedZip={selectedZip}
+          />
+          <NeighborhoodSidebar
+            feature={selectedFeature}
+            isLoading={isFeatureLoading}
+            errorMessage={featureLoadError}
+          />
+        </section>
+      ) : (
+        <AnalyticsPanel
           geoData={geoData}
           isLoading={isMapLoading}
-          mapLoadError={mapLoadError}
-          onFeatureClick={setSelectedFeatureId}
-          selectedFeatureId={selectedFeatureId}
+          errorMessage={mapLoadError}
           selectedCounty={selectedCounty}
           selectedZip={selectedZip}
         />
-        <NeighborhoodSidebar
-          feature={selectedFeature}
-          isLoading={isFeatureLoading}
-          errorMessage={featureLoadError}
-        />
-      </section>
+      )}
     </main>
   );
 }

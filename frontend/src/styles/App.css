@@ -66,6 +66,45 @@
   font-family: var(--font-body);
 }
 
+.view-tabs {
+  margin-top: var(--s-4);
+  display: inline-flex;
+  gap: 0.42rem;
+  padding: 0.24rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.view-tab {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.35rem 0.82rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.view-tab:hover {
+  border-color: var(--border-soft);
+}
+
+.view-tab.is-active {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--surface-1);
+}
+
+.view-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
 .status-alert {
   margin-top: var(--s-4);
   display: flex;
@@ -246,6 +285,182 @@
   min-height: calc(100vh - 190px);
 }
 
+.analytics-content {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+}
+
+.analytics-panel {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  padding: var(--s-4);
+}
+
+.analytics-state p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.analytics-head {
+  margin-bottom: var(--s-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--s-4);
+}
+
+.analytics-head h2 {
+  margin: 0;
+  font-size: clamp(1.18rem, 1.05rem + 0.6vw, 1.5rem);
+}
+
+.analytics-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.analytics-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.62rem;
+  margin-bottom: var(--s-4);
+}
+
+.analytics-kpi {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 0.62rem 0.72rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.analytics-kpi span {
+  font-size: 0.74rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.analytics-kpi strong {
+  font-size: 1.15rem;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+.analytics-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  padding: 0.72rem;
+}
+
+.analytics-card h3 {
+  margin: 0 0 0.52rem;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+}
+
+.dosage-buckets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.dosage-buckets li {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dosage-buckets span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.bucket-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.bucket-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
+}
+
+.dosage-buckets strong {
+  font-size: 0.76rem;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.analytics-table th,
+.analytics-table td {
+  text-align: left;
+  padding: 0.44rem 0.36rem;
+  border-bottom: 1px solid var(--row-border);
+  color: var(--text-secondary);
+}
+
+.analytics-table th {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analytics-list {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.analytics-list code {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.1rem 0.34rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.75rem;
+}
+
+.formula-name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
 .map-shell {
   border: 1px solid var(--border-soft);
   border-radius: var(--r-lg);
@@ -411,6 +626,14 @@
     min-height: auto;
   }
 
+  .analytics-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
   .map-stage {
     min-height: 55vh;
   }
@@ -472,6 +695,35 @@
   .map-legend {
     width: min(220px, 56%);
     font-size: 0.72rem;
+  }
+
+  .view-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .view-tab {
+    flex: 1;
+    text-align: center;
+  }
+
+  .analytics-panel {
+    padding: var(--s-3);
+  }
+
+  .analytics-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.24rem;
+  }
+
+  .analytics-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dosage-buckets li {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    gap: 0.35rem;
   }
 }
 
